@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <title>LOL / TFT 팀 나누기</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <style>
+    :root{--bg:#f4f6fb;--panel:#ffffff;--text:#111827;--accent:#6366f1}
+    body.dark{--bg:#0f172a;--panel:#1e293b;--text:#e5e7eb}
+    body{margin:0;font-family:Pretendard,Arial,sans-serif;background:var(--bg);color:var(--text)}
+
+    #loader{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:var(--bg);z-index:9999}
+    .spinner{width:48px;height:48px;border:5px solid #c7d2fe;border-top-color:var(--accent);border-radius:50%;animation:spin 1s linear infinite}
+    @keyframes spin{to{transform:rotate(360deg)}}
+
+    header{display:flex;justify-content:center;gap:10px;padding:14px}
+    header a{padding:10px 16px;border-radius:12px;text-decoration:none;font-weight:700;color:white;background:#9ca3af}
+    header a.active{background:var(--accent)}
+
+    .container{max-width:1100px;margin:auto;padding:16px}
+    .panel{background:var(--panel);border-radius:16px;padding:16px;box-shadow:0 6px 18px rgba(0,0,0,.15);margin-bottom:16px}
+    .controls{display:flex;gap:8px;flex-wrap:wrap}
+    input{flex:1;padding:10px;border-radius:8px;border:1px solid #ccc}
+    button{padding:10px 14px;border:none;border-radius:10px;cursor:pointer;font-weight:600}
+    .primary{background:var(--accent);color:white}
+    .secondary{background:#6b7280;color:white}
+    .danger{background:#ef4444;color:white}
+
+    .layout{display:grid;grid-template-columns:280px 1fr;gap:16px}
+    @media(max-width:768px){.layout{grid-template-columns:1fr}}
+
+    .name-item{padding:8px;margin-bottom:6px;border-radius:8px;background:#e5e7eb;cursor:pointer}
+    body.dark .name-item{background:#334155}
+    .name-item.selected{outline:2px solid var(--accent)}
+
+    .teams{display:grid;gap:16px}
+    .teams.lol{grid-template-columns:1fr 1fr}
+    .teams.tft{grid-template-columns:1fr 1fr}
+    @media(min-width:900px){.teams.tft{grid-template-columns:1fr 1fr 1fr 1fr}}
+
+    .team{min-height:220px;border-radius:16px;padding:12px;background:var(--panel)}
+    .team h3{text-align:center;margin:4px 0}
+    .count{text-align:center;font-size:13px;opacity:.7}
+    .player{padding:8px;margin:6px 0;background:#e5e7eb;border-radius:8px;text-align:center;cursor:grab;touch-action:none}
+    body.dark .player{background:#334155}
+
+    section{display:none}
+    section.active{display:block}
+  </style>
+</head>
+<body>
+<div id="loader"><div class="spinner"></div></div>
+
+<header>
+  <a href="#lol" id="linkLOL">LOL 팀 나누기</a>
+  <a href="#tft" id="linkTFT">TFT 팀 나누기</a>
+</header>
+
+<section id="lol" class="active">
+  <div class="container">
+    <h1>LOL 팀 나누기</h1>
+    <div class="panel controls">
+      <input id="lolName" placeholder="이름 입력" />
+      <button class="primary" onclick="add('lol')">추가</button>
+      <button class="secondary" onclick="shuffle('lol')">팀 나누기</button>
+      <button class="danger" onclick="reset('lol')">초기화</button>
+    </div>
+    <div class="layout">
+      <div class="panel"><h3>이름 목록</h3><div id="lolNames"></div></div>
+      <div id="lolTeams" class="teams lol"></div>
+    </div>
+  </div>
+</section>
+
+<section id="tft">
+  <div class="container">
+    <h1>TFT 팀 나누기</h1>
+    <div class="panel controls">
+      <input id="tftName" placeholder="이름 입력" />
+      <button class="primary" onclick="add('tft')">추가</button>
+      <button class="secondary" onclick="shuffle('tft')">팀 나누기</button>
+      <button class="danger" onclick="reset('tft')">초기화</button>
+    </div>
+    <div class="layout">
+      <div class="panel"><h3>이름 목록</h3><div id="tftNames"></div></div>
+      <div id="tftTeams" class="teams tft"></div>
+    </div>
+  </div>
+</section>
+
+<script>
+const state = JSON.parse(localStorage.getItem('split')) || { lol:{names:[],teams:{}}, tft:{names:[],teams:{}} };
+let sel = { lol:null, tft:null }, drag = null;
+
+function route(){
+  const h = location.hash.replace('#','') || 'lol';
+  document.querySelectorAll('section').forEach(s=>s.classList.remove('active'));
+  document.getElementById(h).classList.add('active');
+  linkLOL.classList.toggle('active',h==='lol');
+  linkTFT.classList.toggle('active',h==='tft');
+}
+
+function add(m){
+  const i = document.getElementById(m+'Name');
+  if(!i.value) return;
+  state[m].names.push(i.value);
+  i.value='';
+  render(m); save();
+}
+
+function reset(m){
+  if(m==='lol') state[m]={names:[],teams:{blue:[],red:[]}};
+  else state[m]={names:[],teams:{blue:[],red:[],green:[],black:[]}};
+  render(m); save();
+}
+
+function shuffle(m){
+  const arr=[...state[m].names].sort(()=>Math.random()-0.5);
+  if(m==='lol'){
+    state[m].teams={blue:[],red:[]};
+    arr.forEach((n,i)=>state[m].teams[i<Math.ceil(arr.length/2)?'blue':'red'].push(n));
+  }else{
+    state[m].teams={blue:[],red:[],green:[],black:[]};
+    let i=0;
+    for(const k in state[m].teams)
+      for(let j=0;j<2 && i<arr.length;j++,i++) state[m].teams[k].push(arr[i]);
+  }
+  render(m); save();
+}
+
+function render(m){
+  const nEl=document.getElementById(m+'Names'); nEl.innerHTML='';
+  state[m].names.forEach(n=>{
+    const d=document.createElement('div');
+    d.className='name-item'+(sel[m]===n?' selected':'');
+    d.textContent=n;
+    d.onclick=()=>{sel[m]=n;render(m)};
+    nEl.appendChild(d);
+  });
+
+  const tEl=document.getElementById(m+'Teams'); tEl.innerHTML='';
+  for(const k in state[m].teams){
+    const t=document.createElement('div');
+    t.className='team';
+    t.ondragover=e=>e.preventDefault();
+    t.ondrop=e=>drop(e,m,k);
+    t.innerHTML=`<h3>${k.toUpperCase()}</h3><div class=count>${state[m].teams[k].length}명</div>`;
+    state[m].teams[k].forEach(n=>{
+      const p=document.createElement('div');
+      p.className='player'; p.textContent=n;
+      p.draggable=true; p.ondragstart=()=>drag=n;
+      t.appendChild(p);
+    });
+    tEl.appendChild(t);
+  }
+}
+
+function drop(e,m,k){
+  e.preventDefault(); if(!drag) return;
+  Object.values(state[m].teams).forEach(t=>{const i=t.indexOf(drag); if(i>-1) t.splice(i,1)});
+  state[m].teams[k].push(drag);
+  drag=null; render(m); save();
+}
+
+function save(){ localStorage.setItem('split',JSON.stringify(state)); }
+
+window.addEventListener('hashchange', route);
+window.addEventListener('load', () => {
+  route();
+
+  if(!state.lol.teams.blue) state.lol.teams={blue:[],red:[]};
+  if(!state.tft.teams.blue) state.tft.teams={blue:[],red:[],green:[],black:[]};
+
+  render('lol');
+  render('tft');
+
+  loader.remove();
+});
+</script>
+</body>
+</html>
